@@ -1,5 +1,11 @@
 {
     //示例文件
-    "projectDir": "D:\\UserData\\WorkSpace\\Project\\Git",
-    "subDir": ["archive"]
+    "projectDir": "D:\\UserData\\WorkSpace",
+    "subDir": ["archive"],
+    "remarks":[
+        {
+            "name":"example",
+            "remark":"示例项目"
+        }
+    ]
 }

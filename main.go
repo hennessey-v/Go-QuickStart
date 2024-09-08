@@ -14,8 +14,12 @@ const configFile = "config.json"
 
 // Config 结构体用于存储配置信息
 type Config struct {
-	ProjectDir string   `json:"projectDir"` // 项目目录路径
-	SubDir     []string `json:"subDir"`     // 子目录列表
+	ProjectDir string   `json:"projectDir"`
+	SubDir     []string `json:"subDir"`
+	Remarks    []struct {
+		Name   string `json:"name"`
+		Remark string `json:"remark"`
+	} `json:"remarks"`
 }
 
 func main() {
@@ -25,12 +29,15 @@ func main() {
 		return
 	}
 
-	if err := runProjectMenu(config.ProjectDir, config.SubDir); err != nil {
+	if err := runProjectMenu(config.ProjectDir, config.SubDir, config.Remarks); err != nil {
 		fmt.Println("程序异常:", err)
 	}
 }
 
-func runProjectMenu(projectDir string, subDirs []string) error {
+func runProjectMenu(projectDir string, subDirs []string, remarks []struct {
+	Name   string `json:"name"`
+	Remark string `json:"remark"`
+}) error {
 	// 读取项目目录下的文件夹列表
 	folders, err := listFolders(projectDir, subDirs)
 	if err != nil {
@@ -43,15 +50,14 @@ func runProjectMenu(projectDir string, subDirs []string) error {
 
 	// 循环显示文件夹列表，直到用户选择成功或者主动退出
 	for {
-		printFolderList(folders, subDirs)
+		printFolderList(folders, subDirs, remarks)
 		choice, err := getUserChoice(len(folders))
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
 		selectedFolder := folders[choice-1].Name()
-		fmt.Printf("您选择的文件夹是：%s\n", selectedFolder)
-		if err := runCommand(selectedFolder, subDirs); err != nil {
+		if err := runCommand(selectedFolder, subDirs, remarks); err != nil {
 			return fmt.Errorf("无法执行命令: %v", err)
 		}
 		break
@@ -146,16 +152,25 @@ func listFolders(dir string, subDirs []string) ([]os.DirEntry, error) {
 	return folders, nil
 }
 
-// 打印文件夹列表，如果是子目录，添加*号标记
-func printFolderList(folders []os.DirEntry, subDirs []string) {
-
-	fmt.Println("启动项目:")
+// 打印文件夹列表，如果是子目录，添加*号标记，如果有备注，显示备注
+func printFolderList(folders []os.DirEntry, subDirs []string, remarks []struct {
+	Name   string `json:"name"`
+	Remark string `json:"remark"`
+}) {
+	fmt.Println("启动项目：")
 	for i, folder := range folders {
 		folderName := folder.Name()
+		remark := ""
+		for _, r := range remarks {
+			if r.Name == folderName {
+				remark = fmt.Sprintf("  [%s]", r.Remark)
+				break
+			}
+		}
 		if contains(folderName, subDirs) {
 			folderName += "*"
 		}
-		fmt.Printf("%d. %s\n", i+1, folderName)
+		fmt.Printf("%d. %s%s\n", i+1, folderName, remark)
 	}
 }
 
@@ -172,8 +187,11 @@ func getUserChoice(maxChoice int) (int, error) {
 }
 
 // 进入项目目录并打印目录下的文件夹列表
-func runCommand(folder string, subDirs []string) error {
-	fmt.Printf("进入文件夹：%s\n", folder)
+func runCommand(folder string, subDirs []string, remarks []struct {
+	Name   string `json:"name"`
+	Remark string `json:"remark"`
+}) error {
+	fmt.Printf("正在启动项目：%s\n", folder)
 	// 切换到指定文件夹
 	err := os.Chdir(folder)
 	if err != nil {
@@ -205,7 +223,7 @@ func runCommand(folder string, subDirs []string) error {
 			return nil
 		}
 		clearScreen()
-		printFolderList(folders, subDirs)
+		printFolderList(folders, subDirs, remarks)
 
 		for {
 			choice, err := getUserChoice(len(folders))
@@ -214,14 +232,12 @@ func runCommand(folder string, subDirs []string) error {
 				continue
 			}
 			selectedFolder := folders[choice-1].Name()
-			fmt.Printf("您选择的文件夹是：%s\n", selectedFolder)
-			if err := runCommand(selectedFolder, subDirs); err != nil {
+			if err := runCommand(selectedFolder, subDirs, remarks); err != nil {
 				return fmt.Errorf("无法执行命令: %v", err)
 			}
 			break
 		}
 	} else {
-		fmt.Println("运行命令：code .")
 		cmd := exec.Command("code", ".")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -239,6 +255,16 @@ func runCommand(folder string, subDirs []string) error {
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
 				fmt.Println("无法启动 web 服务:", err)
+			}
+		} else if _, err := os.Stat("webman"); err == nil {
+			fmt.Printf("检测到 %s 为 webman 项目\n", folder)
+			fmt.Println("5秒后启动 webman 服务，Ctrl+C 停止")
+			time.Sleep(5 * time.Second)
+			cmd := exec.Command("cmd", "/c", "windows.bat")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				fmt.Println("无法启动 webman 服务:", err)
 			}
 		}
 	}
